@@ -3,60 +3,51 @@ Created on 15.07.2017
 
 @author: Intruder
 """
+import csv
+import json
+import os
+import sched
 import subprocess
 import sys
-import os
-import json
-import requests
-import csv
-import sched
 import time
-from uuid import getnode
+import configparser
 from builtins import str
-from pprint import pprint
+
+import requests
 
 if __name__ == "__main__":
-    
-    bridge_ip = "192.168.178.34"
-    bridge_root = "http://" + bridge_ip + "/api"
-    user = "l91nYmlZFqJaWLNOQoNHBWoDRt9AF6S68d48ksRM"
-    user_url = bridge_root + "/" + user
-    lights_url = user_url + "/lights"
-    
+
     ##################### Begin of functions
+    def readConfigFile():
+        config = configparser.ConfigParser()
+        config.read_file(open("AudiHue.cfg"))
+        return config
+
+    def assignValuesFromConfig(config):
+        global bridge_ip, bridge_root, bridge_user, lights_url, user_url, foobar_ip, foobar_port
+        bridge_ip = config['Hue Bridge']['bridge_ip']
+        bridge_user = config['Hue Bridge']['bridge_user']
+        foobar_ip = config['foobar2000 HTTP Control']['foobar_ip']
+        foobar_port = config['foobar2000 HTTP Control']['foobar_port']
+
+        bridge_root = "http://" + bridge_ip + "/api"
+        user_url = bridge_root + "/" + bridge_user
+        lights_url = user_url + "/lights"
+
     
     ##################### Hue Bridge control functions
     def j_dp(j):  # json debug printing to console
         print(json.dumps(j, indent=4))
     
     def authenticate():
-        data = {"devicetype": user}
+        data = {"devicetype": bridge_user}
         r = requests.get(user_url, json=data)
         return r.json()
-    
-    def getLights():
-        data = {}
-        r = requests.get(lights_url, json=data)
-        return r.json()
-    
+
     def lightOn(light):
         data = {"on": True}
         r = requests.put(lights_url + "/" + light + "/state", json=data)
         return r.json()
-
-    def lightOff(light):
-        data = {"on": False}
-        r = requests.put(lights_url + "/" + light + "/state", json=data)
-        return r.json()
-            
-    def lightToggleOnOff(light):
-        data = {"state":""}
-        r = requests.get(lights_url + "/" + light, json=data)
-        j = r.json()
-        if str(j["state"]["on"]) == "True":
-            print(lightOff(light))
-        else:
-            print(lightOn(light))
     
     def lightSetXY(light, xy, bri, on=True, transitiontime="0"):
         """Set a light's XY, brightness, on/off value"""
@@ -72,7 +63,6 @@ if __name__ == "__main__":
         red = 1 if (red == 0) else red
         green = 1 if (green == 0) else green
         blue = 1 if (blue == 0) else blue
-            
         
         red = pow((red + 0.055) / (1.0 + 0.055), 2.4) if (red > 0.04045) else (red / 12.92)
         green = pow((green + 0.055) / (1.0 + 0.055), 2.4) if (green > 0.04045) else (green / 12.92)
@@ -93,6 +83,7 @@ if __name__ == "__main__":
     
     ##################### File processing and lightshow functions
     def openTrack(filepath):
+        # Open track in foobar2000 (or default associated program for file). Currently not used.
         if sys.platform.startswith("darwin"):
             subprocess.call(("open", filepath))
         elif os.name == "nt":
@@ -101,7 +92,7 @@ if __name__ == "__main__":
             subprocess.call(("xdg-open", filepath))
             
     def controlFoobar():
-        requests.get("http://127.0.0.1:8888/default/?cmd=PlayOrPause")
+        requests.get("http://" + foobar_ip + ":" + foobar_port + "/default/?cmd=PlayOrPause")
         
     def processAEKeyframeFile(filepath, delim=";"):
         # Read file
@@ -128,7 +119,6 @@ if __name__ == "__main__":
                     keyframeTable.append([int(content[i][1]) / float(fps), RGBtoXY(float(content[i][3]), float(content[i][4]), float(content[i][5]))])
                     line_ColorKeyframes_End += 1
                 i += 1
-                
             
             # Read and convert brightness
             x = 0
@@ -170,14 +160,16 @@ if __name__ == "__main__":
     #def collectFiles(baseFilepath, numberOfChannels):
         
     ##################### End of functions
+
+    assignValuesFromConfig(readConfigFile())
         
     authenticate()
 
-    lightshow01 = processAEKeyframeFile(os.path.join(r"C:\Users\Intruder\My Documents\LiClipse Workspace\AudiHue\test", "Servitude-AE-Keyframes-Left.csv"))
-    lightshow02 = processAEKeyframeFile(os.path.join(r"C:\Users\Intruder\My Documents\LiClipse Workspace\AudiHue\test", "Servitude-AE-Keyframes-Middle.csv"))
-    lightshow03 = processAEKeyframeFile(os.path.join(r"C:\Users\Intruder\My Documents\LiClipse Workspace\AudiHue\test", "Servitude-AE-Keyframes-Right.csv"))
+    #lightshow01 = processAEKeyframeFile(os.path.join(r"C:\Users\Intruder\My Documents\LiClipse Workspace\AudiHue\test", "Servitude-AE-Keyframes-Left.csv"))
+    #lightshow02 = processAEKeyframeFile(os.path.join(r"C:\Users\Intruder\My Documents\LiClipse Workspace\AudiHue\test", "Servitude-AE-Keyframes-Middle.csv"))
+    #lightshow03 = processAEKeyframeFile(os.path.join(r"C:\Users\Intruder\My Documents\LiClipse Workspace\AudiHue\test", "Servitude-AE-Keyframes-Right.csv"))
 
-    lightshowComposition = composeChannels(lightshow03, lightshow01, lightshow02)
+    #lightshowComposition = composeChannels(lightshow03, lightshow01, lightshow02)
     # pprint(lightSetXY("1", [0.4573, 0.41], 253))
-    playLightshow(lightshowComposition)
+    #playLightshow(lightshowComposition)
     pass
